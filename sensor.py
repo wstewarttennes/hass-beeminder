@@ -1,18 +1,16 @@
 """Support for Beeminder sensors."""
-import logging
-from typing import Any, Dict, Optional
-
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import (
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.helpers.typing import HomeAssistantType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 
-_LOGGER = logging.getLogger(__name__)
-
 async def async_setup_platform(
     hass: HomeAssistantType,
-    config: Dict[str, Any],
+    config,
     async_add_entities,
     discovery_info=None,
 ) -> None:
@@ -34,20 +32,37 @@ class BeeminderSensor(CoordinatorEntity, SensorEntity):
         self._goal_slug = goal_slug
         self._attr_unique_id = f"beeminder_{goal_slug}"
         self._attr_name = f"Beeminder {goal_slug}"
+        self._attr_native_unit_of_measurement = "total"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
-    def state(self):
+    def native_value(self):
         """Return the state of the sensor."""
-        return self.coordinator.data[self._goal_slug]["current_value"]
+        try:
+            if self.coordinator.data:
+                goal_data = self.coordinator.data.get(self._goal_slug, {})
+                datapoints = goal_data.get("datapoints", [])
+                if datapoints:
+                    return float(datapoints[0].get("value", 0))
+            return None
+        except Exception as e:
+            return None
 
     @property
     def extra_state_attributes(self):
         """Return the state attributes."""
-        return {
-            "rate": self.coordinator.data[self._goal_slug]["rate"],
-            "goal_value": self.coordinator.data[self._goal_slug]["goal_value"],
-            "pledge": self.coordinator.data[self._goal_slug]["pledge"],
-            "safe_days": self.coordinator.data[self._goal_slug]["safe_days"],
-            "losedate": self.coordinator.data[self._goal_slug]["losedate"],
-            "delta": self.coordinator.data[self._goal_slug]["delta"]
-        }
+        try:
+            if self.coordinator.data:
+                goal_data = self.coordinator.data.get(self._goal_slug, {})
+                return {
+                    "rate": goal_data.get("rate", 0),
+                    "goal_value": goal_data.get("goal_value", 0),
+                    "pledge": goal_data.get("pledge", 0),
+                    "safe_days": goal_data.get("safe_days", 0),
+                    "losedate": goal_data.get("losedate", ""),
+                    "delta": goal_data.get("delta", 0),
+                    "datapoints": goal_data.get("datapoints", [])
+                }
+            return {}
+        except Exception:
+            return {}
