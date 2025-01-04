@@ -1,0 +1,10 @@
+{
+    "domain": "beeminder",
+    "name": "Beeminder",
+    "documentation": "https://github.com/wstewarttennes/hass-beeminder",
+    "dependencies": [],
+    "codeowners": [],
+    "requirements": ["requests>=2.25.1"],
+    "iot_class": "cloud_polling",
+    "version": "1.0.0"
+}
