@@ -1,4 +1,5 @@
 """The Beeminder integration."""
+
 import logging
 from datetime import timedelta
 
@@ -27,6 +28,7 @@ CONFIG_SCHEMA = vol.Schema(
     extra=vol.ALLOW_EXTRA,
 )
 
+
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Beeminder component."""
     if DOMAIN not in config:
@@ -38,16 +40,13 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     coordinator = BeeminderDataUpdateCoordinator(hass, username, auth_token)
     await coordinator.async_refresh()
-    
-    hass.data[DOMAIN] = {
-        "coordinator": coordinator
-    }
 
-    hass.async_create_task(
-        async_load_platform(hass, "sensor", DOMAIN, {}, config)
-    )
+    hass.data[DOMAIN] = {"coordinator": coordinator}
+
+    hass.async_create_task(async_load_platform(hass, "sensor", DOMAIN, {}, config))
 
     return True
+
 
 class BeeminderDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching Beeminder data."""
@@ -69,46 +68,52 @@ class BeeminderDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             goals = {}
             params = {"auth_token": self.auth_token}
-            
+
             # Fetch goals
             response = await self.hass.async_add_executor_job(
                 lambda: requests.get(f"{self.base_url}/goals.json", params=params)
             )
             response.raise_for_status()
             goals_data = response.json()
-            
+
             # Process each goal and fetch its datapoints
             for goal in goals_data:
                 slug = goal["slug"]
-                
+
                 # Fetch datapoints for this goal
                 datapoints_response = await self.hass.async_add_executor_job(
                     lambda: requests.get(
                         f"{self.base_url}/goals/{slug}/datapoints.json",
-                        params={**params, "count": 100, "sort": "daystamp"}  # Get last 100 datapoints
+                        params={
+                            **params,
+                            "count": 100,
+                            "sort": "daystamp",
+                        },  # Get last 100 datapoints
                     )
                 )
                 datapoints_response.raise_for_status()
                 datapoints = datapoints_response.json()
-                
+
                 # Store goal data with full datapoints history
                 goals[slug] = {
                     "current_value": goal.get("curval", 0),
+                    "goal_value": goal.get(
+                        "goalval", goal.get("rate", 0)
+                    ),  # Prioritize goalval, fallback to rate
                     "rate": goal.get("rate", 0),
-                    "goal_value": goal.get("goalval", 0),
                     "pledge": goal.get("pledge", 0),
                     "safe_days": goal.get("safebuf", 0),
                     "losedate": goal.get("losedate", ""),
                     "delta": goal.get("delta", 0),
                     "datapoints": [
                         {
-                            "timestamp": int(dp.get("timestamp", 0)) * 1000,  # Convert to milliseconds for ApexCharts
-                            "value": float(dp.get("value", 0))
+                            "timestamp": int(dp.get("timestamp", 0))
+                            * 1000,  # Convert to milliseconds for ApexCharts
+                            "value": float(dp.get("value", 0)),
                         }
                         for dp in datapoints
-                    ]
+                    ],
                 }
-            
             return goals
 
         except requests.exceptions.RequestException as err:
