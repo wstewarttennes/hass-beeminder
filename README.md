@@ -66,9 +66,29 @@ Get your auth token from: https://www.beeminder.com/api/v1/auth_token.json
 1. Install [Extended OpenAI Conversation](https://github.com/jekalmin/extended_openai_conversation) via HACS
 2. Configure it with your preferred AI provider (OpenAI, OpenRouter for Claude, etc.)
 
-### Add Voice Control
+### Quick Setup
 
-1. **Create the Script** in `scripts.yaml`:
+For complete configuration details, see [VOICE_ASSISTANT_SETUP.md](VOICE_ASSISTANT_SETUP.md).
+
+### 1. Create Template Sensors
+
+Create file `packages/beeminder_templates.yaml` with sensors for different time periods:
+```yaml
+template:
+  sensor:
+    - name: "Beeminder Goals Derailing Today"
+      state: >
+        {% set goals = states.sensor | selectattr('entity_id', 'match', 'sensor.beeminder_.*_days_until_derailment') | selectattr('state', 'eq', '0') | list %}
+        {% if goals | length > 0 %}
+          {{ goals | map(attribute='attributes.title') | list | join(', ') }}
+        {% else %}
+          No goals derailing today
+        {% endif %}
+```
+
+### 2. Add Voice Control Script
+
+Add to `scripts.yaml`:
 ```yaml
 add_beeminder_datapoint:
   alias: Add Beeminder Datapoint
@@ -78,11 +98,9 @@ add_beeminder_datapoint:
     value:
       description: The numeric value to add
       required: true
-      example: 10
     goal:
       description: The Beeminder goal name
       required: true
-      example: pushups
     date:
       description: Date for the datapoint (YYYY-MM-DD)
       required: false
@@ -118,20 +136,11 @@ add_beeminder_datapoint:
         auth_token: "{{ auth_token }}"
 ```
 
-2. **Add REST Command** in `configuration.yaml`:
-```yaml
-rest_command:
-  beeminder_add_datapoint:
-    url: "https://www.beeminder.com/api/v1/users/{{ states('input_text.beeminder_username') | default('YOUR_USERNAME') }}/goals/{{ goal }}/datapoints.json"
-    method: post
-    payload: '{"value": {{ value }}, "daystamp": "{{ daystamp }}", "comment": "{{ comment }}", "auth_token": "{{ auth_token }}"}'
-    content_type: 'application/json'
-    verify_ssl: true
-```
+### 3. Configure Extended OpenAI Functions
 
-3. **Configure Extended OpenAI Conversation**:
+Add these functions to Extended OpenAI Conversation:
 
-In the UI configuration, add this function:
+**Add Data Function:**
 ```yaml
 - spec:
     name: add_beeminder_data
@@ -141,7 +150,7 @@ In the UI configuration, add this function:
       properties:
         goal:
           type: string
-          description: The Beeminder goal name like pushups, coding, weight
+          description: The Beeminder goal name
         value:
           type: number
           description: The numeric value to add
@@ -158,13 +167,46 @@ In the UI configuration, add this function:
         comment: "Added via voice AI"
 ```
 
+**Check Status Function:**
+```yaml
+- spec:
+    name: get_beeminder_status
+    description: Get information about Beeminder goals status
+    parameters:
+      type: object
+      properties:
+        time_period:
+          type: string
+          description: Time period to check
+          enum: [today, tomorrow, soon, week, safe, most_urgent, count, all]
+          default: today
+  function:
+    type: template
+    value_template: >
+      {% if time_period == 'today' %}
+        {{ states('sensor.beeminder_goals_derailing_today') }}
+      {% elif time_period == 'tomorrow' %}
+        {{ states('sensor.beeminder_goals_derailing_tomorrow') }}
+      {% elif time_period == 'week' %}
+        {{ states('sensor.beeminder_goals_derailing_this_week') }}
+      {% else %}
+        {{ states('sensor.beeminder_goals_derailing_today') }}
+      {% endif %}
+```
+
 ### Voice Commands
 
-Once configured, you can say:
+**Adding Data:**
 - "Add 10 pushups to Beeminder"
 - "Log 30 minutes of coding"
 - "Record 5000 steps"
-- "Add 170 pounds to my weight goal"
+- "I did 2 floss"
+
+**Checking Status:**
+- "What Beeminder goals am I derailing on today?"
+- "What goals are due tomorrow?"
+- "What goals are derailing this week?"
+- "What's my most urgent Beeminder goal?"
 
 ## Automation Examples
 
@@ -213,6 +255,64 @@ automation:
           goal: "toothbrush"
           value: 1
           comment: "Auto-logged by motion sensor"
+```
+
+## Template Sensors
+
+The integration includes comprehensive template sensors for tracking goal urgency across different time periods. These are especially useful for voice assistant queries and dashboard cards.
+
+### Available Template Sensors
+
+Create these in `packages/beeminder_templates.yaml`:
+
+1. **Goals Derailing Today** - Lists all goals with 0 days until derailment
+2. **Goals Derailing Tomorrow** - Lists all goals with 1 day until derailment  
+3. **Goals Derailing Soon** - Lists goals derailing in 2-3 days
+4. **Goals Derailing This Week** - Lists all goals derailing within 7 days
+5. **Safe Goals** - Lists goals with more than 7 days buffer
+6. **Most Urgent Goal** - Shows your single most urgent goal
+7. **Goals Count by Urgency** - Shows counts for today, tomorrow, and this week
+
+### Example Template Sensor Configuration
+
+```yaml
+template:
+  sensor:
+    - name: "Beeminder Goals Derailing This Week"
+      state: >
+        {% set goals = states.sensor 
+          | selectattr('entity_id', 'match', 'sensor.beeminder_.*_days_until_derailment') 
+          | selectattr('state', 'le', '7') 
+          | list %}
+        {% if goals | length > 0 %}
+          {% set ns = namespace(names=[]) %}
+          {% for goal in goals %}
+            {% set title = goal.attributes.get('title', '') %}
+            {% set goal_name = title if title else goal.entity_id.replace('sensor.beeminder_', '').replace('_days_until_derailment', '').replace('_', ' ').title() %}
+            {% set ns.names = ns.names + [goal_name + ': ' + goal.state + ' days'] %}
+          {% endfor %}
+          {{ ns.names | join(', ') }}
+        {% else %}
+          No goals derailing this week
+        {% endif %}
+```
+
+### Using Template Sensors in Automations
+
+```yaml
+automation:
+  - alias: "Morning Goal Report"
+    trigger:
+      - platform: time
+        at: "08:00:00"
+    condition:
+      - condition: template
+        value_template: "{{ states('sensor.beeminder_goals_derailing_today') != 'No goals derailing today' }}"
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "Beeminder Goals Due Today"
+          message: "{{ states('sensor.beeminder_goals_derailing_today') }}"
 ```
 
 ## Dashboard Cards
