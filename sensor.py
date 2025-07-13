@@ -1,5 +1,6 @@
 """Support for Beeminder sensors."""
 
+from datetime import datetime
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
@@ -23,6 +24,7 @@ async def async_setup_platform(
     for goal_slug in coordinator.data:
         entities.append(BeeminderCurrentValueSensor(coordinator, goal_slug))
         entities.append(BeeminderGoalValueSensor(coordinator, goal_slug))
+        entities.append(BeeminderDaysUntilDerailmentSensor(coordinator, goal_slug))
 
     async_add_entities(entities, True)
 
@@ -57,15 +59,8 @@ class BeeminderSensor(CoordinatorEntity, SensorEntity):
         try:
             if self.coordinator.data:
                 goal_data = self.coordinator.data.get(self._goal_slug, {})
-                return {
-                    "rate": goal_data.get("rate", 0),
-                    "goal_value": goal_data.get("goal_value", 0),
-                    "pledge": goal_data.get("pledge", 0),
-                    "safe_days": goal_data.get("safe_days", 0),
-                    "losedate": goal_data.get("losedate", ""),
-                    "delta": goal_data.get("delta", 0),
-                    "datapoints": goal_data.get("datapoints", []),
-                }
+                # Return all available goal data as attributes
+                return goal_data.copy()
             return {}
         except Exception:
             return {}
@@ -94,3 +89,59 @@ class BeeminderGoalValueSensor(BeeminderSensor):
             return None
         except Exception:
             return None
+
+
+class BeeminderDaysUntilDerailmentSensor(BeeminderSensor):
+    """Sensor for days until derailment of a Beeminder goal."""
+
+    def __init__(self, coordinator, goal_slug):
+        super().__init__(coordinator, goal_slug, "days_until_derailment", "Days Until Derailment", unit="days")
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+
+    @property
+    def native_value(self):
+        """Return the days until derailment."""
+        try:
+            if self.coordinator.data:
+                goal_data = self.coordinator.data.get(self._goal_slug, {})
+                losedate = goal_data.get("losedate")
+                
+                if losedate:
+                    # Calculate days until derailment
+                    derailment_date = datetime.fromtimestamp(losedate)
+                    current_date = datetime.now()
+                    days_remaining = (derailment_date - current_date).days
+                    
+                    # Return days remaining, but not negative
+                    return max(0, days_remaining)
+                    
+                return None
+        except Exception:
+            return None
+
+    @property
+    def extra_state_attributes(self):
+        """Return additional attributes specific to derailment."""
+        base_attrs = super().extra_state_attributes
+        
+        try:
+            if self.coordinator.data:
+                goal_data = self.coordinator.data.get(self._goal_slug, {})
+                losedate = goal_data.get("losedate")
+                
+                if losedate:
+                    derailment_date = datetime.fromtimestamp(losedate)
+                    current_date = datetime.now()
+                    hours_remaining = (derailment_date - current_date).total_seconds() / 3600
+                    
+                    base_attrs.update({
+                        "derailment_date": derailment_date.isoformat(),
+                        "hours_until_derailment": max(0, round(hours_remaining, 1)),
+                        "is_derailing_soon": hours_remaining <= 24,
+                        "is_derailing_today": hours_remaining <= 0,
+                    })
+                    
+        except Exception:
+            pass
+            
+        return base_attrs

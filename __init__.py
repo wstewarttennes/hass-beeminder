@@ -94,22 +94,111 @@ class BeeminderDataUpdateCoordinator(DataUpdateCoordinator):
                 datapoints_response.raise_for_status()
                 datapoints = datapoints_response.json()
 
-                # Store goal data with full datapoints history
+                # Store goal data with full datapoints history and all available fields
                 goals[slug] = {
+                    # Core values
                     "current_value": goal.get("curval", 0),
-                    "goal_value": goal.get(
-                        "goalval", goal.get("rate", 0)
-                    ),  # Prioritize goalval, fallback to rate
+                    "goal_value": goal.get("goalval", goal.get("rate", 0)),
                     "rate": goal.get("rate", 0),
                     "pledge": goal.get("pledge", 0),
                     "safe_days": goal.get("safebuf", 0),
                     "losedate": goal.get("losedate", ""),
                     "delta": goal.get("delta", 0),
+                    
+                    # Goal metadata
+                    "title": goal.get("title", ""),
+                    "goal_type": goal.get("goal_type", ""),
+                    "yaxis": goal.get("yaxis", ""),
+                    "runits": goal.get("runits", ""),
+                    "gunits": goal.get("gunits", ""),
+                    "fineprint": goal.get("fineprint", ""),
+                    "updated_at": goal.get("updated_at", 0),
+                    
+                    # Status fields
+                    "won": goal.get("won", False),
+                    "lost": goal.get("lost", False),
+                    "frozen": goal.get("frozen", False),
+                    "queued": goal.get("queued", False),
+                    "secret": goal.get("secret", False),
+                    "datapublic": goal.get("datapublic", True),
+                    
+                    # Progress tracking
+                    "curday": goal.get("curday", 0),
+                    "currate": goal.get("currate", 0),
+                    "lastday": goal.get("lastday", 0),
+                    "initday": goal.get("initday", 0),
+                    "initval": goal.get("initval", 0),
+                    "goaldate": goal.get("goaldate", 0),
+                    
+                    # Safety buffer and derailment
+                    "safebump": goal.get("safebump", 0),
+                    "delta_text": goal.get("delta_text", ""),
+                    "limsum": goal.get("limsum", ""),
+                    "limsumdays": goal.get("limsumdays", ""),
+                    "baremin": goal.get("baremin", ""),
+                    "baremintotal": goal.get("baremintotal", ""),
+                    
+                    # Urgency and scheduling
+                    "urgencykey": goal.get("urgencykey", 0),
+                    "deadline": goal.get("deadline", 0),
+                    "leadtime": goal.get("leadtime", 0),
+                    "alertstart": goal.get("alertstart", 0),
+                    
+                    # Graph and visualization
+                    "svg_url": goal.get("svg_url", ""),
+                    "graph_url": goal.get("graph_url", ""),
+                    "thumb_url": goal.get("thumb_url", ""),
+                    "lanewidth": goal.get("lanewidth", 0),
+                    "yaw": goal.get("yaw", 0),
+                    "dir": goal.get("dir", 0),
+                    "lane": goal.get("lane", 0),
+                    
+                    # Automation and data
+                    "autodata": goal.get("autodata", ""),
+                    "autoratchet": goal.get("autoratchet", 0),
+                    "last_datapoint": goal.get("last_datapoint", {}),
+                    "todayta": goal.get("todayta", False),
+                    "hhmmformat": goal.get("hhmmformat", False),
+                    "integery": goal.get("integery", False),
+                    
+                    # Advanced settings
+                    "aggday": goal.get("aggday", ""),
+                    "kyoom": goal.get("kyoom", False),
+                    "odom": goal.get("odom", False),
+                    "mathishard": goal.get("mathishard", []),
+                    "headsum": goal.get("headsum", ""),
+                    "steppy": goal.get("steppy", False),
+                    "rosy": goal.get("rosy", False),
+                    "movingav": goal.get("movingav", False),
+                    "aura": goal.get("aura", False),
+                    
+                    # Contract and road
+                    "contract": goal.get("contract", {}),
+                    "road": goal.get("road", []),
+                    "roadall": goal.get("roadall", []),
+                    "fullroad": goal.get("fullroad", []),
+                    "rah": goal.get("rah", 0),
+                    
+                    # Other metadata
+                    "id": goal.get("id", ""),
+                    "callback_url": goal.get("callback_url", ""),
+                    "description": goal.get("description", ""),
+                    "graphsum": goal.get("graphsum", ""),
+                    "plotall": goal.get("plotall", True),
+                    "maxflux": goal.get("maxflux", 0),
+                    "maxday": goal.get("maxday", 0),
+                    "numpts": goal.get("numpts", 0),
+                    
+                    # Tags
+                    "tags": goal.get("tags", []),
+                    
+                    # Datapoints
                     "datapoints": [
                         {
-                            "timestamp": int(dp.get("timestamp", 0))
-                            * 1000,  # Convert to milliseconds for ApexCharts
+                            "timestamp": int(dp.get("timestamp", 0)) * 1000,
                             "value": float(dp.get("value", 0)),
+                            "comment": dp.get("comment", ""),
+                            "id": dp.get("id", ""),
                         }
                         for dp in datapoints
                     ],

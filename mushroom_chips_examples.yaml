@@ -1,0 +1,250 @@
+# Mushroom Chips for Beeminder Goals
+# Add these to your Home Assistant dashboard
+
+# Single chip showing count of goals due today
+type: custom:mushroom-chips-card
+chips:
+  - type: template
+    entity: sensor.beeminder_weight_days_until_derailment  # Replace with any of your goals
+    icon: mdi:target-variant
+    icon_color: |
+      {% set goals = states.sensor 
+        | selectattr('entity_id', 'match', 'sensor.beeminder_.*_days_until_derailment')
+        | selectattr('state', 'defined')
+        | map(attribute='state')
+        | map('float', default=999)
+        | select('lt', 1)
+        | list %}
+      {% if goals | length > 0 %}
+        red
+      {% else %}
+        green
+      {% endif %}
+    content: |
+      {% set goals = states.sensor 
+        | selectattr('entity_id', 'match', 'sensor.beeminder_.*_days_until_derailment')
+        | selectattr('state', 'defined')
+        | map(attribute='state')
+        | map('float', default=999)
+        | select('lt', 1)
+        | list %}
+      {{ goals | length }} due today
+    tap_action:
+      action: navigate
+      navigation_path: /lovelace/beeminder  # Adjust to your dashboard path
+
+---
+
+# Individual chips for each goal due today (dynamic)
+type: custom:auto-entities
+card:
+  type: custom:mushroom-chips-card
+filter:
+  include:
+    - entity_id: sensor.beeminder_*_days_until_derailment
+      state: < 1
+      options:
+        type: template
+        icon: mdi:alert-circle
+        icon_color: red
+        content: >
+          {{ state_attr(entity, 'title') | regex_replace(find=' ', replace='') | truncate(10, True, '...', 0) }}
+        tap_action:
+          action: more-info
+
+---
+
+# Chips showing goals by urgency (today, tomorrow, this week)
+type: custom:mushroom-chips-card
+chips:
+  # Goals due today
+  - type: template
+    icon: mdi:alert-decagram
+    icon_color: red
+    content: |
+      {% set goals = states.sensor 
+        | selectattr('entity_id', 'match', 'sensor.beeminder_.*_days_until_derailment')
+        | selectattr('state', 'defined')
+        | rejectattr('state', 'in', ['unknown', 'unavailable'])
+        | selectattr('state', 'lt', '1')
+        | list %}
+      Today: {{ goals | length }}
+    tap_action:
+      action: fire-dom-event
+      browser_mod:
+        service: browser_mod.popup
+        data:
+          title: Goals Due Today
+          content:
+            type: entity-filter
+            entities: >
+              {{ states.sensor 
+                | selectattr('entity_id', 'match', 'sensor.beeminder_.*_days_until_derailment')
+                | map(attribute='entity_id')
+                | list }}
+            state_filter:
+              - operator: '<'
+                value: 1
+            card:
+              type: entities
+  
+  # Goals due tomorrow
+  - type: template
+    icon: mdi:alert
+    icon_color: orange
+    content: |
+      {% set goals = states.sensor 
+        | selectattr('entity_id', 'match', 'sensor.beeminder_.*_days_until_derailment')
+        | selectattr('state', 'defined')
+        | rejectattr('state', 'in', ['unknown', 'unavailable'])
+        | selectattr('state', 'ge', '1')
+        | selectattr('state', 'lt', '2')
+        | list %}
+      Tomorrow: {{ goals | length }}
+    tap_action:
+      action: fire-dom-event
+      browser_mod:
+        service: browser_mod.popup
+        data:
+          title: Goals Due Tomorrow
+          content:
+            type: entity-filter
+            entities: >
+              {{ states.sensor 
+                | selectattr('entity_id', 'match', 'sensor.beeminder_.*_days_until_derailment')
+                | map(attribute='entity_id')
+                | list }}
+            state_filter:
+              - operator: '>='
+                value: 1
+              - operator: '<'
+                value: 2
+            card:
+              type: entities
+
+  # Goals due this week
+  - type: template
+    icon: mdi:calendar-week
+    icon_color: yellow
+    content: |
+      {% set goals = states.sensor 
+        | selectattr('entity_id', 'match', 'sensor.beeminder_.*_days_until_derailment')
+        | selectattr('state', 'defined')
+        | rejectattr('state', 'in', ['unknown', 'unavailable'])
+        | selectattr('state', 'lt', '7')
+        | list %}
+      Week: {{ goals | length }}
+
+---
+
+# Compact chip row with goal names and time remaining
+type: custom:auto-entities
+card:
+  type: custom:mushroom-chips-card
+filter:
+  include:
+    - entity_id: sensor.beeminder_*_days_until_derailment
+      state: < 3
+      options:
+        type: template
+        icon: >
+          {% if states(entity) | float < 1 %}
+            mdi:skull-crossbones
+          {% elif states(entity) | float < 2 %}
+            mdi:alert
+          {% else %}
+            mdi:clock-alert-outline
+          {% endif %}
+        icon_color: >
+          {% if states(entity) | float < 1 %}
+            red
+          {% elif states(entity) | float < 2 %}
+            orange
+          {% else %}
+            yellow
+          {% endif %}
+        content: >
+          {% set hours = state_attr(entity, 'hours_until_derailment') | float %}
+          {% set title = state_attr(entity, 'title') | regex_replace(find=' ', replace='') %}
+          {% if hours < 24 %}
+            {{ title | truncate(8, True, '', 0) }}: {{ hours | round(0) }}h
+          {% else %}
+            {{ title | truncate(8, True, '', 0) }}: {{ states(entity) | round(0) }}d
+          {% endif %}
+        tap_action:
+          action: url
+          url_path: https://www.beeminder.com/{{ state_attr(entity, 'slug') }}
+  sort:
+    method: state
+    numeric: true
+
+---
+
+# Minimalist single chip with dynamic color based on most urgent goal
+type: custom:mushroom-chips-card
+chips:
+  - type: template
+    icon: mdi:bee
+    icon_color: >
+      {% set min_days = states.sensor 
+        | selectattr('entity_id', 'match', 'sensor.beeminder_.*_days_until_derailment')
+        | selectattr('state', 'defined')
+        | rejectattr('state', 'in', ['unknown', 'unavailable'])
+        | map(attribute='state')
+        | map('float', default=999)
+        | min %}
+      {% if min_days < 1 %}
+        red
+      {% elif min_days < 2 %}
+        orange
+      {% elif min_days < 4 %}
+        yellow
+      {% else %}
+        green
+      {% endif %}
+    content: >
+      {% set urgent = states.sensor 
+        | selectattr('entity_id', 'match', 'sensor.beeminder_.*_days_until_derailment')
+        | selectattr('state', 'defined')
+        | rejectattr('state', 'in', ['unknown', 'unavailable'])
+        | selectattr('state', 'lt', '1')
+        | list | length %}
+      {% set soon = states.sensor 
+        | selectattr('entity_id', 'match', 'sensor.beeminder_.*_days_until_derailment')
+        | selectattr('state', 'defined')
+        | rejectattr('state', 'in', ['unknown', 'unavailable'])
+        | selectattr('state', 'ge', '1')
+        | selectattr('state', 'lt', '3')
+        | list | length %}
+      {% if urgent > 0 %}
+        🚨 {{ urgent }}
+      {% elif soon > 0 %}
+        ⚠️ {{ soon }}
+      {% else %}
+        ✅ All good
+      {% endif %}
+    tap_action:
+      action: navigate
+      navigation_path: /lovelace/beeminder
+
+---
+
+# Progress chip showing baremin completed
+type: custom:mushroom-chips-card
+chips:
+  - type: template
+    icon: mdi:progress-check
+    content: >
+      {% set completed = states.sensor 
+        | selectattr('entity_id', 'match', 'sensor.beeminder_.*_current_value')
+        | selectattr('attributes.baremintotal', 'defined')
+        | selectattr('attributes.baremin', 'defined')
+        | selectattr('attributes.baremintotal', '>', 0)
+        | list | length %}
+      {{ completed }} done today
+    icon_color: >
+      {% if completed > 0 %}
+        green
+      {% else %}
+        grey
+      {% endif %}
