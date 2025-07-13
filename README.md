@@ -144,13 +144,13 @@ Add these functions to Extended OpenAI Conversation:
 ```yaml
 - spec:
     name: add_beeminder_data
-    description: Immediately add data to a Beeminder goal without asking for confirmation
+    description: Add data to a Beeminder goal. The script will map common goal names (like triceps->tricepdips, pushups variations, etc.)
     parameters:
       type: object
       properties:
         goal:
           type: string
-          description: The Beeminder goal name
+          description: The Beeminder goal name like pushups, coding, weight, triceps
         value:
           type: number
           description: The numeric value to add
@@ -165,6 +165,14 @@ Add these functions to Extended OpenAI Conversation:
         goal: "{{ goal }}"
         value: "{{ value }}"
         comment: "Added via voice AI"
+      continue_on_error: false
+      response_variable: script_result
+    - stop: >
+        {% if script_result is defined and script_result.result is defined %}
+          {{ script_result.result }}
+        {% else %}
+          I've sent {{ value }} to your {{ goal }} goal. Please check Beeminder to confirm it was added successfully.
+        {% endif %}
 ```
 
 **Check Status Function:**
