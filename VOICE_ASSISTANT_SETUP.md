@@ -329,11 +329,20 @@ template:
 ## Voice Commands Examples
 
 ### Adding Data
-- "Add 10 pushups to Beeminder"
-- "I did 30 minutes of coding"
-- "Log 5000 steps"
-- "Record 170 pounds to my weight goal"
-- "Add 2 to floss"
+All goals support multiple variations:
+- **Pushups**: "Add 10 pushups", "I did 10 push-ups", "10 push ups"
+- **Pullups**: "Add 5 pullups", "I did 5 pull-ups", "5 pull ups"
+- **Coding**: "30 minutes of coding", "I coded for 30 minutes", "programming 30"
+- **Triceps**: "15 triceps", "I did 15 tricep dips", "15 triceps-dips"
+- **Stretch**: "I stretched", "1 stretching", "did my stretches"
+- **Floss**: "I flossed", "dental floss 1", "flossing done"
+- **Toothbrush**: "brushed my teeth", "tooth brush 1", "brushing done"
+- **Ice cream**: "ate ice cream", "had dessert", "ice-cream 1"
+- **Crunches**: "did 20 crunches", "20 abs", "20 sit-ups"
+- **Sing**: "practiced singing", "vocal practice", "voice 1"
+- **Random exercise**: "random exercise done", "did exercise"
+- **Meds**: "took medication", "medicine taken", "pills 1"
+- **Steps**: "5000 steps", "walked 5000", "step count 5000"
 
 ### Checking Status
 - "What Beeminder goals am I derailing on today?"
